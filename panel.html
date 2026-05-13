@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>LLM BS Detector</title>
+  <link rel="stylesheet" href="panel.css" />
+</head>
+<body>
+  <header class="bs-header">
+    <h1>BS Detector</h1>
+    <div class="bs-counts">
+      <span class="bs-count bs-count-red" id="redCount">0</span>
+      <span class="bs-count bs-count-yellow" id="yellowCount">0</span>
+    </div>
+  </header>
+
+  <div class="bs-host" id="hostName">Not connected</div>
+
+  <div class="bs-flags" id="flagsList">
+    <div class="bs-empty">
+      No flags yet. Open Claude.ai or ChatGPT and start chatting — flags will appear here as the AI responds.
+    </div>
+  </div>
+
+  <footer class="bs-footer">
+    <button id="clearBtn">Clear flags</button>
+    <a href="https://github.com/buildingirrelevance/llm-bs-detector" target="_blank">GitHub</a>
+  </footer>
+
+  <script src="panel.js"></script>
+</body>
+</html>
