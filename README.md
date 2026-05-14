@@ -20,10 +20,10 @@ It's not a hallucination detector — it can't tell you if a specific fact is wr
 | Site | Status |
 |------|--------|
 | Claude.ai | ✅ Verified |
-| ChatGPT (chatgpt.com / chat.openai.com) | ⚠️ Declared, not fully verified |
-| Grok (grok.com) | ⚠️ Selector verified May 11 2026, end-to-end untested |
-| DeepSeek (chat.deepseek.com) | ⚠️ Selector verified May 11 2026, end-to-end untested |
-| Gemini (gemini.google.com) | ⚠️ Selector verified May 11 2026, end-to-end untested |
+| ChatGPT (chatgpt.com / chat.openai.com) | ✅ Verified |
+| Grok (grok.com) | ✅ Verified |
+| DeepSeek (chat.deepseek.com) | ✅ Verified |
+| Gemini (gemini.google.com) | ✅ Verified |
 
 ## Features
 
