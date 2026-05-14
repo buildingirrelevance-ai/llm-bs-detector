@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LLM BS Detector",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Flags ungrounded confidence and hedge-word patterns in LLM responses. Helps you spot when an AI is pattern-matching from training instead of actually verifying.",
   "permissions": ["storage", "sidePanel"],
 "host_permissions": [
