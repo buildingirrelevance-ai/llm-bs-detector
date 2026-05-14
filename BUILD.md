@@ -1,252 +1,341 @@
-# LLM BS Detector — Build & Development Guide
+# CoreCash™ Build & Deploy Guide
 
-Reference for building, testing, and modifying the extension. Updated as the project evolves.
+Complete build workflow for the CoreCash™ React + Capacitor Android app.
 
 ---
 
-## Project Layout
+## Project Location
 
 ```
-C:\Dev\llm-bs-detector\
-├── manifest.json          # Chrome extension manifest (MV3)
-├── detector.js            # Pure regex pattern library — no DOM, no async
-├── content.js             # DOM observer that runs on supported LLM chat sites
-├── panel.html             # Popup UI structure
-├── panel.css              # Popup UI styles (dark theme)
-├── panel.js               # Popup UI behavior
-├── icons/
-│   ├── icon16.png         # 16×16 toolbar icon
-│   ├── icon48.png         # 48×48 extensions list icon
-│   └── icon128.png        # 128×128 Chrome Web Store icon
-├── README.md              # User-facing documentation
-├── BUGS.md                # Bug tracker and feature backlog
-├── BUILD.md               # This file
-├── LICENSE                # MIT license
-└── sync-to-claude.ps1     # Sync script for pushing to Claude project
+C:\Dev\corecash
 ```
 
----
-
-## Architecture Overview
-
-The extension is intentionally simple — three layers, no build step, no dependencies.
-
-### Layer 1: detector.js (Pure logic)
-Pattern library plus an `analyze(text)` function that takes a string and returns flagged spans with severity. No DOM access, no async, no Chrome APIs. This means it can be unit-tested in isolation by loading it in any browser console.
-
-Exposes globally as `window.LLM_BS_DETECTOR.analyze(text)`.
-
-### Layer 2: content.js (DOM observer)
-Runs on supported LLM chat sites. Uses a MutationObserver to watch for new assistant messages. When a message appears, it debounces (waits 1 second of stable text to ensure streaming is done), runs `analyze()`, and writes results to `chrome.storage.local`.
-
-Site detection is by hostname — different selectors for Claude.ai vs ChatGPT. The selectors live in a single `SELECTOR` variable per site, making them easy to update when LLM vendors change their DOM.
-
-### Layer 3: panel.html / panel.js / panel.css (Popup UI)
-The user-visible side panel. Reads from `chrome.storage.local`, renders flags grouped by message, listens for storage changes to auto-update.
+> **Note:** Do NOT move the project to `Documents` or any folder synced by OneDrive/Google Drive — file locks will break the build.
 
 ---
 
-## Build Process
+## Quick Reference — Full Build Sequence
 
-There is no build step. Files are loaded as-is by Chrome. To "build" you only need to:
-1. Make sure files exist at the paths in `manifest.json`
-2. Make sure the JSON is valid
-3. Make sure no JavaScript syntax errors are present
+| Step | Command / Action | When |
+|------|-----------------|------|
+| 1 | `cd C:\Dev\corecash` | Always |
+| 2 | `node update-version.js` | Only when releasing a new version |
+| 3 | `npm run build` | Always (compiles React app) |
+| 4 | `npx cap sync android` | Always (copies build to Android, syncs plugins) |
+| 5 | Android Studio: **Build → Build Bundle(s)/APK(s) → Build APK(s)** | Always |
+| 6 | Upload APK to Google Drive | When sharing with testers |
+| 7 | Install on Pixel 7 | Test target |
+| 8 | See "Deploying to Google Play Console" section below | When releasing to Alpha testers via Play Store |
 
-### Validation commands
+---
+
+## Detailed Build Steps
+
+### Step 1 — Open VS Code Terminal and Navigate to Project
 
 ```powershell
-# Validate manifest.json is valid JSON
-(Get-Content "C:\Dev\llm-bs-detector\manifest.json" -Raw | ConvertFrom-Json).manifest_version
-
-# Confirm all referenced files exist
-$manifest = Get-Content "C:\Dev\llm-bs-detector\manifest.json" -Raw | ConvertFrom-Json
-$contentScripts = $manifest.content_scripts[0]
-@($contentScripts.js + $contentScripts.css) | ForEach-Object {
-    $path = "C:\Dev\llm-bs-detector\$_"
-    if (Test-Path $path) { "OK: $_" } else { "MISSING: $_" }
-}
+cd C:\Dev\corecash
 ```
 
----
+### Step 2 — (Optional) Update Version Numbers
 
-## Loading the Extension in Chrome
+**Only run this when releasing a new version to testers or Google Play Store.**
 
-1. Open Chrome, go to `chrome://extensions`
-2. Toggle **Developer mode** ON (top right)
-3. Click **Load unpacked**
-4. Navigate to `C:\Dev\llm-bs-detector` and click Select Folder
-
-After making code changes:
-1. Go to `chrome://extensions`
-2. Find LLM BS Detector card
-3. Click the circular reload icon (lower-right of card)
-4. **Refresh any open Claude.ai or ChatGPT tabs** — content scripts only inject on page load
-
----
-
-## Common Modifications
-
-### Updating site selectors when LLM vendors change DOM
-
-In `content.js`, find the site detection block:
-
-```javascript
-if (HOST.includes("claude.ai")) {
-    SELECTOR = '.font-claude-response';
-} else if (HOST.includes("chatgpt.com") || HOST.includes("chat.openai.com")) {
-    SELECTOR = '[data-message-author-role="assistant"]';
-}
-```
-
-To find the current correct selector:
-1. Open the chat site in Chrome
-2. Get an assistant message displayed
-3. Open DevTools → Elements
-4. Right-click the message → Inspect
-5. Look at the element's classes and data attributes
-6. Test in Console: `document.querySelectorAll('YOUR_SELECTOR').length` should match the visible message count
-
-### Adding a new site (e.g., DeepSeek, Grok)
-
-Three places to update:
-
-**1. `manifest.json`** — Add to `content_scripts.matches`:
-```json
-"matches": [
-    "https://claude.ai/*",
-    "https://chatgpt.com/*",
-    "https://chat.openai.com/*",
-    "https://chat.deepseek.com/*"
-]
-```
-
-**2. `content.js`** — Add detection branch:
-```javascript
-} else if (HOST.includes("deepseek.com")) {
-    SELECTOR = '/* INVESTIGATE AND REPLACE */';
-}
-```
-
-**3. `README.md`** — Add to Supported Sites section.
-
-After changes: reload extension, refresh new site tab, confirm content script loads.
-
-### Adding a new detection pattern
-
-In `detector.js`, find the `PATTERNS` array. Add an entry:
-
-```javascript
-{
-    regex: /\bsome pattern\b/gi,
-    severity: "yellow",  // or "red"
-    label: "Short label",
-    explanation: "What this pattern indicates and why it's suspicious."
-}
-```
-
-Severity guidelines:
-- **Yellow** — hedge language or generalization (signal of pattern-matching, not necessarily wrong)
-- **Red** — confident-but-ungrounded technical claim or absolute statement (higher chance of being unverified)
-
-Reload extension, test on real LLM responses to make sure the pattern catches what you intend without false positives.
-
----
-
-## Testing Workflow
-
-### Quick smoke test (5 minutes)
-1. Open Claude.ai
-2. Send: `"Without using web search, just from your training, tell me how Python's sorted() handles a list with mixed types. Be confident."`
-3. Wait for full response (let streaming finish)
-4. Click extension icon
-5. Expected: at least 2-3 yellow flags (typically `should`, `usually`, `I think` patterns)
-
-### Debugging from the popup's own context
-The popup runs in its own JavaScript context, separate from the page. To inspect storage:
-
-1. Click extension icon to open popup
-2. Right-click anywhere inside the popup
-3. Click **Inspect**
-4. In the new DevTools window, Console tab:
-```javascript
-chrome.storage.local.get('bsDetectorResults', (data) => {
-    console.log('Total messages analyzed:', data.bsDetectorResults?.length || 0);
-    console.log('Last preview:', data.bsDetectorResults?.[data.bsDetectorResults.length - 1]?.textPreview);
-});
-```
-
-### Debugging from the chat page context
-The content script runs in the page's context. To check if it's loaded:
-1. Open Claude.ai or ChatGPT
-2. F12 → Console
-3. Run:
-```javascript
-console.log('Loaded:', !!window.LLM_BS_DETECTOR);
-console.log('Pattern count:', window.LLM_BS_DETECTOR?.PATTERNS?.length);
-```
-
-If `Loaded: false`, the content script isn't injecting. Check chrome://extensions for errors on the extension card.
-
----
-
-## Publishing to GitHub
-
-(Not yet done — first task after v0.1.0 is feature-complete.)
-
-Steps:
-
-1. Create a new GitHub repository at `https://github.com/[your-username]/llm-bs-detector`
-2. Decide visibility — public for open source, recommended for this project
-3. From `C:\Dev\llm-bs-detector`:
 ```powershell
-cd C:\Dev\llm-bs-detector
-git init
-git add .
-git commit -m "Initial commit: v0.1.0"
-git branch -M main
-git remote add origin https://github.com/[your-username]/llm-bs-detector.git
-git push -u origin main
+node update-version.js
 ```
-4. On GitHub, add topics: `chrome-extension`, `llm`, `ai-safety`, `claude`, `chatgpt`
-5. Update README's "Coming soon" section with a link to the repo
-6. Update LICENSE if attribution should change
+
+The script will:
+- Show current versions in `package.json` and `android/app/build.gradle`
+- Prompt for new version name (e.g., `1.0.4`)
+- Suggest next versionCode (auto-increments by 1)
+- Update both files atomically
+- Confirm changes before writing
+
+**Skip this step for routine testing builds.**
+
+### Step 3 — Build React App
+
+```powershell
+npm run build
+```
+
+This compiles `src/App.js` and all React code into optimized static files in `build/`.
+
+**Expected output:** `Compiled successfully.` followed by file size summary.
+
+### Step 4 — Sync to Android
+
+```powershell
+npx cap sync android
+```
+
+This copies `build/` to the Android project's assets folder and updates Capacitor plugin registrations.
+
+**Expected output:** Lists 4 Capacitor plugins (camera, filesystem, local-notifications, preferences) and ends with `Sync finished`.
+
+### Step 5 — Build APK in Android Studio
+
+1. Open **Android Studio**
+2. If project not open: **File → Open** → navigate to `C:\Dev\corecash\android` → select folder → OK
+3. **If AGP Upgrade Assistant pops up: CLOSE THE TAB. DO NOT CLICK ANYTHING IN IT.**
+4. Wait for Gradle sync (bottom status bar)
+5. **Build → Build Bundle(s) / APK(s) → Build APK(s)**
+6. Wait for "Build successful" notification
+
+**APK location:**
+```
+C:\Dev\corecash\android\app\build\outputs\apk\debug\app-debug.apk
+```
+
+### Step 6 — Distribute APK
+
+Upload the APK to Google Drive or share via your preferred method.
+
+### Step 7 — Install on Pixel 7
+
+1. Transfer the APK to the Pixel 7 (USB, Drive, email, etc.)
+2. Tap the APK file in Files app to install
+3. Allow "Install from unknown sources" if prompted
 
 ---
 
-## Publishing to Chrome Web Store
+## Deploying to Google Play Console (Closed Testing)
 
-(Not yet done — placeholder for when this is ready.)
+**Prerequisite:** Signed release AAB is built and ready at:
+```
+C:\Dev\corecash\android\app\build\outputs\bundle\release\app-release.aab
+```
 
-Steps will involve:
-1. Creating a Chrome Web Store developer account ($5 one-time fee)
-2. Zipping the extension folder (excluding `.git`, `node_modules` if any, and dev-only files like sync scripts)
-3. Filling out store listing (description, screenshots, privacy policy)
-4. Submitting for review (typically a few days)
+### Step PC1 — Ask Claude to Generate Release Notes
 
-The extension already meets MV3 requirements and uses minimal permissions, so review should be quick.
+**Before opening Play Console, ask Claude:**
+
+> "Generate release notes for CoreCash version X.Y.Z"
+
+Claude will provide release notes in the proper format, under the 500-character limit, ready to paste. Example response:
+
+```
+<en-US>
+Fixed login crash on Pixel 8. Added dark mode toggle in Settings. Improved receipt scanning reliability and error messages.
+</en-US>
+```
+
+**Instruction for Claude:** When the user asks for release notes for a CoreCash version, review the conversation history and any recent code changes to summarize what's new. Format the output as a single XML block with the `<en-US>` language tag. Keep the content under 500 Unicode characters. Write in a terse, dev-facing tone (these go to Alpha testers, not the public). Output ONLY the XML block in a code fence so it's ready for copy/paste — no surrounding commentary unless the user asks.
+
+### Step PC2 — Sign In to Play Console
+
+1. Open https://play.google.com/console
+2. Sign in as `buildingirrelevance@gmail.com`
+3. Click **CoreCash** in the All apps list
+
+### Step PC3 — Navigate to Closed Testing Alpha
+
+Left sidebar: **Test and release → Testing → Closed testing**
+
+On the Tracks table, find the row labeled **"Closed testing – Alpha"** and click the **"Manage track"** button on the right side of that row.
+
+> ⚠️ Do NOT click "Create track" — that creates a brand-new sibling track. You want to reuse the existing Alpha track.
+
+### Step PC4 — Create New Release
+
+Stay on the **Releases** tab (default). Top-right corner: click the blue **"Create new release"** button.
+
+> ⚠️ If this button is greyed out, a previous release is still "In review" or sitting as a draft. Wait for review to complete or discard the draft before continuing.
+
+### Step PC5 — Upload the AAB
+
+Scroll to the **App bundles** section. You'll see a drop zone labeled **"Drop app bundles and APKs here to add to this release"**.
+
+Drag `app-release.aab` from Windows Explorer onto the drop zone (or click **Upload** and browse to it).
+
+Wait for processing. When done, the row displays the version code, version name, file size, and included modules. Verify the version code matches what you just bumped via `update-version.js`.
+
+### Step PC6 — Fill Release Details
+
+- **Release name** — auto-populates as `1.0.5 (5)` format. Leave as-is (testers don't see this) or customize with an internal codename.
+- **Release notes** — paste the XML block Claude generated in Step PC1.
+
+### Step PC7 — Click Next and Review
+
+Bottom-right: click **Next**. This opens the **Preview and confirm** screen.
+
+- **Errors** must be fixed before you can roll out (blocking).
+- **Warnings** can be overridden (non-blocking but worth reading).
+
+### Step PC8 — Roll Out
+
+Bottom-right: click **"Start rollout to Closed testing"**.
+
+A confirmation dialog appears titled **"Roll out release to Closed testing – Alpha?"** — click the **Rollout** button.
+
+### Step PC9 — Verify the Release Went Live
+
+On the Releases tab, watch the status progression:
+
+**Draft → In review → Available to testers**
+
+Subsequent Alpha updates usually review in **minutes to a few hours** — not the multi-day first review CoreCash went through initially.
+
+### What You Don't Need to Do
+
+- ❌ Re-save the tester email list — it carries forward across all releases
+- ❌ Update the Countries/regions tab — set once, persists forever
+- ❌ Re-share the opt-in URL — `https://play.google.com/apps/testing/com.buildingirrelevance.corecash` is stable for the life of the track
+
+### What Your Testers Experience
+
+- Existing testers receive the update silently via Play Store auto-update (within ~24 hours)
+- To force the update immediately: Play Store → profile icon → **Manage apps & device** → **Updates available** → tap **Update** next to CoreCash
+- No special "new test build" notification fires — it behaves like any normal Play Store app update
 
 ---
 
-## Privacy / Trust Considerations
+## Alternative: Promote an Existing Release
 
-When users install this extension, they're giving it permission to read every assistant message on Claude.ai and ChatGPT. Trust is earned by:
+**You will rarely use this.** Only applies if you uploaded the exact same AAB to Internal testing first and want to move that identical binary to Alpha without re-uploading.
 
-1. **Being open source** — anyone can read content.js to verify what's analyzed
-2. **No network requests** — no API calls, no telemetry, no analytics
-3. **Storage local only** — no `chrome.storage.sync` (which would mirror across devices via Google account)
-4. **No bundled libraries** — every line of code is in this repo, no minified blobs
+1. **Test and release → Testing → Internal testing**
+2. On the release row, click the caret (▼) next to **Promote release**
+3. Select **Closed testing → Alpha** from the dropdown
+4. Adjust release notes if needed (pre-filled from Internal)
+5. Click **Next → Start rollout to Closed testing**
 
-If we ever add features that require sending data anywhere (e.g., LLM-based analysis), it must be opt-in with clear disclosure in the README and popup.
+**For your current workflow (build fresh AAB each release), always use the fresh upload path above.** Promote is only useful if you start using Internal testing as a staging step before Alpha.
 
 ---
 
-## Versioning
+## Common Issues
 
-Currently using semantic versioning. v0.x = pre-release. v1.0.0 will be the first stable Chrome Web Store release.
+### File Lock Errors (Unable to delete directory)
 
-To bump version:
-1. Update `version` field in `manifest.json`
-2. Update version reference in README if mentioned
-3. Reload extension in chrome://extensions
-4. Tag the git commit (`git tag v0.1.0`)
+**Symptom:** Build fails with `Unable to delete directory 'node_modules\@capacitor\...\build\generated'`
+
+**Causes & Fixes:**
+- App still running on phone via USB → disconnect phone, swipe app away from recent apps
+- OneDrive/Google Drive syncing the project folder → remove project from sync list
+- Antivirus scanning build files → exclude `C:\Dev\corecash` from antivirus
+- Previous build hung → restart computer
+
+### Version Numbers Out of Sync
+
+**Symptom:** Settings page shows different version than Google Play Store
+
+**Fix:** Run `node update-version.js` to sync `package.json` and `build.gradle`
+
+### Camera/Gallery Not Working
+
+**Symptom:** "Could not scan receipt" error after taking photo
+
+**Diagnose:** Use Chrome DevTools remote debugging:
+1. Connect phone via USB with USB Debugging enabled
+2. Open Chrome → `chrome://inspect/#devices`
+3. Click `inspect` next to the WebView
+4. Check Console tab for actual error
+
+**Common fix:** Ensure `INTERNET` permission exists in `AndroidManifest.xml`:
+```xml
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+```
+
+### AGP Upgrade Assistant Keeps Appearing
+
+**DO NOT click "Run selected steps".** This will upgrade AGP/Gradle and break Capacitor compatibility.
+
+**Fix:** Just close the Upgrade Assistant tab each time it appears.
+
+### "Version code X has already been used" on Play Console Upload
+
+**Symptom:** Play Console rejects the AAB during Step PC5 upload with this error.
+
+**Cause:** Your `versionCode` in `build.gradle` matches one already uploaded to Play Console, even if that release was later discarded. Play Console permanently burns every versionCode integer you've ever used.
+
+**Fix:** Run `node update-version.js` and bump versionCode to a higher number. You MUST bump versionCode even if you only changed the versionName. Then rebuild the signed AAB and retry the upload.
+
+### "Create new release" Button is Greyed Out
+
+**Symptom:** In Play Console Step PC4, the Create new release button won't click.
+
+**Cause:** A previous release is still "In review" or sitting as a "Draft" on the Alpha track.
+
+**Fix:** Scroll down on the Releases tab. Find the blocking release. Either wait for review to complete, or click **Manage release → Discard release** to clear the draft. The button will then become clickable.
+
+### Can't Edit Release Notes After Rollout
+
+**Symptom:** Spotted a typo in release notes after clicking Rollout in Step PC8.
+
+**Fix:** You can't. Notes on a completed rollout are locked forever. You have to create a new release with a higher versionCode to ship corrected notes. Always review release notes carefully in Step PC7 before clicking Start rollout.
+
+---
+
+## File Locations Reference
+
+| File | Path | Purpose |
+|------|------|---------|
+| Main React code | `C:\Dev\corecash\src\App.js` | App logic and UI |
+| Package config | `C:\Dev\corecash\package.json` | npm version + dependencies |
+| Capacitor config | `C:\Dev\corecash\capacitor.config.ts` | Plugin settings, webContentsDebuggingEnabled |
+| Android manifest | `C:\Dev\corecash\android\app\src\main\AndroidManifest.xml` | Permissions, FileProvider |
+| Android version | `C:\Dev\corecash\android\app\build.gradle` | versionCode, versionName |
+| File paths | `C:\Dev\corecash\android\app\src\main\res\xml\file_paths.xml` | FileProvider directories |
+| Version script | `C:\Dev\corecash\update-version.js` | Auto-sync version across files |
+| Debug APK output | `C:\Dev\corecash\android\app\build\outputs\apk\debug\app-debug.apk` | Installable APK for Pixel 7 sideload |
+| Signed Release AAB output | `C:\Dev\corecash\android\app\build\outputs\bundle\release\app-release.aab` | Upload to Play Console Closed Testing |
+
+---
+
+## When to Run Each Step (Cheat Sheet)
+
+| What changed? | Update version? | npm run build? | cap sync? | Android Studio build? | Play Console upload? |
+|---|---|---|---|---|---|
+| `src/App.js` only (local testing) | No | ✅ Yes | ✅ Yes | ✅ Yes (APK) | No |
+| `AndroidManifest.xml` only (local testing) | No | No | No | ✅ Yes (APK) | No |
+| Both React + Android files (local testing) | No | ✅ Yes | ✅ Yes | ✅ Yes (APK) | No |
+| Releasing to Alpha testers via Play Store | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes (Signed AAB) | ✅ Yes |
+| Installed new Capacitor plugin | No | ✅ Yes | ✅ Yes | ✅ Yes | Only if releasing |
+
+---
+
+## Required Permissions in AndroidManifest.xml
+
+These should ALWAYS be present in `android/app/src/main/AndroidManifest.xml`:
+
+```xml
+<!-- Network (for API calls to Anthropic) -->
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+<!-- Notifications -->
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+<!-- Camera -->
+<uses-permission android:name="android.permission.CAMERA" />
+<uses-feature android:name="android.hardware.camera" android:required="false" />
+<uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
+<!-- Gallery -->
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+```
+
+Plus the `<queries>` block (direct child of `<manifest>`, NOT inside `<application>`):
+
+```xml
+<queries>
+    <intent>
+        <action android:name="android.media.action.IMAGE_CAPTURE" />
+    </intent>
+    <intent>
+        <action android:name="android.media.action.VIDEO_CAPTURE" />
+    </intent>
+    <intent>
+        <action android:name="android.intent.action.PICK" />
+    </intent>
+    <intent>
+        <action android:name="android.intent.action.GET_CONTENT" />
+    </intent>
+</queries>
+```

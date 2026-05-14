@@ -17,7 +17,7 @@ $projectRoot = "C:\Dev\llm-bs-detector"
 
 # CHANGE THIS PATH to your Claude project sync folder.
 # This is wherever you keep files you upload to Claude's project knowledge.
-$claudeProjectFolder = "C:\Users\$env:USERNAME\Documents\Claude Projects\llm-bs-detector"
+$claudeProjectFolder = "C:\Dev\llm-bs-detector\SyncFile"
 
 # ---- Files to sync ----
 # Listed explicitly. Each file must exist and be non-empty for the sync
@@ -26,13 +26,15 @@ $filesToSync = @(
     "manifest.json",
     "detector.js",
     "content.js",
+    "background.js",           
     "panel.html",
     "panel.css",
     "panel.js",
     "README.md",
     "BUGS.md",
     "BUILD.md",
-    "LICENSE"
+    "LICENSE",
+    "PRIVACY.md"  
 )
 
 # ---- Sync logic ----
