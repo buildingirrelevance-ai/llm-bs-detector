@@ -39,21 +39,34 @@
         return a.severity === "red" ? -1 : 1;
       });
 
-      for (const flag of sortedFlags) {
-        const severityClass = flag.severity === "red" ? "bs-flag-red" : "bs-flag-yellow";
+// If no flags, render a clean message card with just Jump to and Fact Check
+      if (sortedFlags.length === 0) {
         html.push(
-          `<div class="bs-flag ${severityClass}" data-fingerprint="${msg.fingerprint}">` +
-            `<div class="bs-flag-label">${escapeHtml(flag.label)}</div>` +
-            `<div class="bs-flag-match">${escapeHtml(flag.matchedText)}</div>` +
-            `<div class="bs-flag-explanation">${escapeHtml(flag.explanation)}</div>` +
+          `<div class="bs-flag" data-fingerprint="${msg.fingerprint}">` +
+            `<div class="bs-flag-label" style="color:#64748b;">No flags detected</div>` +
             `<div class="bs-flag-meta">Message #${msg.messageIndex} · ${formatTime(msg.timestamp)}</div>` +
-            
             `<div class="bs-flag-actions">` +
-              `<button class="jump-btn" data-text="${encodeURIComponent(flag.matchedText)}" title="Jump to this message">Jump to</button>` +
-              `<button class="fact-check-btn" data-text="${encodeURIComponent(flag.matchedText)}" data-context="${encodeURIComponent(msg.textPreview)}" title="Fact check this claim">Fact Check</button>` +
+              `<button class="jump-btn" data-text="" title="Jump to this message">Jump to</button>` +
+              `<button class="fact-check-btn" data-text="" data-context="${encodeURIComponent(msg.textPreview)}" title="Fact check this message">Fact Check</button>` +
             `</div>` +
-            `</div>`
+          `</div>`
         );
+      } else {
+        for (const flag of sortedFlags) {
+          const severityClass = flag.severity === "red" ? "bs-flag-red" : "bs-flag-yellow";
+          html.push(
+            `<div class="bs-flag ${severityClass}" data-fingerprint="${msg.fingerprint}">` +
+              `<div class="bs-flag-label">${escapeHtml(flag.label)}</div>` +
+              `<div class="bs-flag-match">${escapeHtml(flag.matchedText)}</div>` +
+              `<div class="bs-flag-explanation">${escapeHtml(flag.explanation)}</div>` +
+              `<div class="bs-flag-meta">Message #${msg.messageIndex} · ${formatTime(msg.timestamp)}</div>` +
+              `<div class="bs-flag-actions">` +
+                `<button class="jump-btn" data-text="${encodeURIComponent(flag.matchedText)}" title="Jump to this message">Jump to</button>` +
+                `<button class="fact-check-btn" data-text="${encodeURIComponent(flag.matchedText)}" data-context="${encodeURIComponent(msg.textPreview)}" title="Fact check this claim">Fact Check</button>` +
+              `</div>` +
+            `</div>`
+          );
+        }
       }
     }
 
@@ -211,7 +224,7 @@
       if (e.target.classList.contains("fact-check-btn")) {
         const claimedText = decodeURIComponent(e.target.dataset.text || "");
         const contextText = decodeURIComponent(e.target.dataset.context || "");
-        if (!claimedText) return;
+        if (!contextText) return;
 
         // Find or create result container inside this flag card
         let resultEl = flagElement.querySelector(".bs-fact-result");

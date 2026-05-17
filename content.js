@@ -84,22 +84,20 @@ window.highlightMessage = function (fp) {
         const fp = fingerprint(currentText);
         if (clearedFingerprints.has(fp)) return;
 
-        const result = window.LLM_BS_DETECTOR.analyze(currentText);
-        if (result.flags.length > 0) {
-          messageCount++;
-          allFlags.push({
-            messageIndex: messageCount,
-            host: HOST,
-            timestamp: Date.now(),
-            textPreview: currentText.slice(0, 4000),
-            fingerprint: fp,
-            flags: result.flags,
-            score: result.score,
-            yellowCount: result.yellowCount,
-            redCount: result.redCount
-          });
-          persistResults();
-        }
+const result = window.LLM_BS_DETECTOR.analyze(currentText);
+        messageCount++;
+        allFlags.push({
+          messageIndex: messageCount,
+          host: HOST,
+          timestamp: Date.now(),
+          textPreview: currentText.slice(0, 2000),
+          fingerprint: fp,
+          flags: result.flags,
+          score: result.score,
+          yellowCount: result.yellowCount,
+          redCount: result.redCount
+        });
+        persistResults();
       } else {
         lastText = currentText;
         stableTimer = setTimeout(checkStable, 1000);
